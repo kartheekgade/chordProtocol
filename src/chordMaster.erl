@@ -34,7 +34,7 @@ start(NumNodes,NumRequests) ->
 
 %%---------------- Create Nodes ---------------%%
 createNodes(1, NumNodes, NumRequests, M) ->
-  SelfID = getHashedID(1, m),
+  SelfID = getHashedID(1, M),
   Pid = spawn(chordNodes, start_link, [SelfID, NumNodes, NumRequests, M, #{}, []]),
   register(SelfID, Pid),
  done;
@@ -52,15 +52,15 @@ chord_logic(NumNodes, M, NumRequests) ->
   wait_for_all_nodes(NumNodes),
   fixFinger(NumNodes, M),
   wait_for_all_nodes(NumNodes),
-  startRequests(m, NumNodes),
+  startRequests(M, NumNodes),
 %%times_received = NumNodes * NumRequests,
   wait_for_all_nodes(NumNodes*NumRequests),
   calculateAvgHops(NumNodes, NumRequests).
 %%--------------------------------------------------%%%
 
 %%--------------- Hashed key ---------------------%%
-getHashedID(i,M) ->
-  KeyGen = integer_to_list(i),
+getHashedID(I,M) ->
+  KeyGen = integer_to_list(I),
   hexlist_to_integer(io_lib:format("~128.16.0b", [binary:decode_unsigned(crypto:hash(sha256, KeyGen))])) rem pow(2,M).
 %%-------------------------------------------------%%
 
