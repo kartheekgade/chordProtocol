@@ -1,3 +1,4 @@
+
 -module(chordMaster).
 
 %% API
@@ -13,9 +14,8 @@ start(NumNodes,NumRequests) ->
     NumRequests < 1 ->
       io:fwrite("Total number of hops is 0");
     NumNodes > 1 ->
-      M = 128,
-
-      gobal:register_name(master,self()),
+      M = 64,
+      % gobal:register_name(master,self()),
       ets:new(counter, [set, public, named_table]),
       ets:insert(counter,{"counter", 0}),
       createNodes(NumNodes, NumNodes, NumRequests, M),
@@ -52,7 +52,7 @@ chord_logic(NumNodes, M, NumRequests) ->
 %%--------------- Hashed key ---------------------%%
 getHashedID(I,M) ->
   KeyGen = integer_to_list(I),
-  httpd_util:hexlist_to_integer(io_lib:format("~128.16.0b", [binary:decode_unsigned(crypto:hash(sha256, KeyGen))])) rem math:pow(2,M).
+  httpd_util:hexlist_to_integer(io_lib:format("~64.16.0b", [binary:decode_unsigned(crypto:hash(sha256, KeyGen))])) rem trunc(math:pow(2,M)).
 %%-------------------------------------------------%%
 
 %%--------------- This function makes the master wait till all the nodes send 'done' ---------------%%

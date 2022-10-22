@@ -29,7 +29,7 @@ fillLookUpTable(NumNodes, LookUpTable, M) ->
   LookUpTable = lists:sort(LookUpTable).
 
 fixFingerTable(SelfID, NumRequests, M, FingerTable, LookUpTable, LowNode, HighNode, 1) ->
-  Num = (SelfID + math:pow(2, M - 1)) rem math:pow(2, M),
+  Num = (SelfID + math:pow(2, M - 1)) rem trunc(math:pow(2, M)),
   FingerTable =
     if
       Num > HighNode ->
@@ -46,7 +46,7 @@ fixFingerTable(SelfID, NumRequests, M, FingerTable, LookUpTable, LowNode, HighNo
   done;
 
 fixFingerTable(SelfID, NumRequests, M, FingerTable, LookUpTable, LowNode, HighNode, Count) when Count > 1 ->
-  Num = (SelfID + math:pow(2, M - Count)) rem math:pow(2, M),
+  Num = (SelfID + trunc(math:pow(2, M - Count))) rem trunc(math:pow(2, M)),
   FingerTable =
     if
       Num > HighNode ->
@@ -72,42 +72,46 @@ handle_cast({find_this_node, Rand_node}, State = #chordNodes_state{}) ->
   InRange =
     if
       SelfID == LowNode ->
-        if Rand_node > HighNode or Rand_node =< LowNode ->
+        if Rand_node > HighNode ->
+          1;
+         Rand_node =< LowNode ->
           1;
           true ->
             0
         end;
       true ->
         if
-          Rand_node > Predecessor and Rand_node =< SelfID ->
-            1;
+          Rand_node > Predecessor ->
+         if Rand_node =< SelfID ->
+            1
+          end;
           true ->
             0
         end
-    end,
+  end,
   if
     InRange == 1 ->
 %%# IO.puts "#{rand_node} is in range of #{selfID}, sending done"
       chordMaster:whereis(SelfID) ! {done, SelfID};
 %%# startRequests(selfID, numNodes, numRequests-1, m, fingerTable, lookUpTable)
     true ->
-      case member(Rand_node, maps:iterator(FingerTable)) of
+      case lists:member(Rand_node, maps:iterator(FingerTable)) of
         true -> Node_pid = chordNodes:whereis(Rand_node)
       end,
 
-      case any(filter(FingerTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z < Rand_node end) of
+      case lists:any(maps:filter(FingerTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z < Rand_node end) of
         true ->
-          case any(filter(LookUpTable, fun(Z) -> Z < Rand_node end), fun(Z) -> z > SelfID end) of
+          case lists:any(lists:filter(LookUpTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z > SelfID end) of
             true ->
-              Temp = filter(sort(values(FingerTable)), fun(Z) -> Z - Rand_node < 0 end),
-              Temp1 = reverse(Temp),
+              Temp = lists:filter(lists:sort(maps:values(FingerTable)), fun(Z) -> Z - Rand_node < 0 end),
+              Temp1 = lists:reverse(Temp),
               [Head | _] = Temp1,
               Node_pid = chordNodes:whereis(Head);
             false ->
               Node_pid = chordMaster:whereis(Successor)
           end
       end,
-      update_counter(counter, "counter", {2, 1}),
+      ets:update_counter(counter, "counter", {2, 1}),
       gen_Server:cast(Node_pid, {find_this_node, Rand_node})
   end,
   {noreply, State}.
@@ -119,7 +123,7 @@ handle_info({_, fixFingerTable}, State = #chordNodes_state{}) ->
   FingerTable = fixFingerTable(SelfID, NumRequests, M, FingerTable, LookUpTable, LowNode, HighNode, M),
 
   State = setnth(4, State, FingerTable),
-  {noreply, State}.
+  {noreply, State};
 
 handle_info({wait_for_startrequest}, State) ->
 [SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable] = State,
@@ -135,17 +139,17 @@ startRequests(SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable),
 findSucPred(SelfID, LookUpTable, LowNode, HighNode) ->
   [Successor, Predecessor] =
     if
-      SelfID == HighNode -> Temp = filter(LookUpTable, fun(Z) -> Z < SelfID end),
-        Temp1 = reverse(Temp),
+      SelfID == HighNode -> Temp = lists:filter(LookUpTable, fun(Z) -> Z < SelfID end),
+        Temp1 = lists:reverse(Temp),
         [Head | _] = Temp1,
         [LowNode, Head];
-      SelfID == LowNode -> Temp = filter(LookUpTable, fun(Z) -> Z > SelfID end),
+      SelfID == LowNode -> Temp = lists:filter(LookUpTable, fun(Z) -> Z > SelfID end),
         [Head | _] = Temp,
         [Head, HighNode];
-      true -> Temp = filter(LookUpTable, fun(Z) -> Z > SelfID end),
+      true -> Temp = lists:filter(LookUpTable, fun(Z) -> Z > SelfID end),
         [Head | _] = Temp,
-        Temp1 = filter(LookUpTable, fun(Z) -> Z < SelfID end),
-        Temp2 = reverse(Temp1),
+        Temp1 = lists:filter(LookUpTable, fun(Z) -> Z < SelfID end),
+        Temp2 = lists:reverse(Temp1),
         [Head1 | _] = Temp2,
         [Head, Head1]
     end.
@@ -173,21 +177,25 @@ startRequests(SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable) when N
 %%# IO.inspect lookUpTable, label: "Node #{selfID}'s LT:"
   [LowNode, HighNode] = findInfo(LookUpTable),
   [Successor, Predecessor] = findSucPred(SelfID, LookUpTable, LowNode, HighNode),
-  Rand_node = rand:uniform(pow(2, M)),
+  Rand_node = rand:uniform(math:pow(2, M)),
 %%# IO.puts "node: #{selfID} -> random node: #{rand_node}"
   InRange =
     if
       SelfID == LowNode ->
         if 
-          Rand_node > HighNode or Rand_node =< LowNode ->
+          Rand_node > HighNode ->
+            1;
+            Rand_node =< LowNode ->
           1;
           true ->
             0
         end;
       true ->
         if
-          Rand_node > Predecessor and Rand_node =< SelfID ->
-            1;
+          Rand_node > Predecessor ->
+            if Rand_node =< SelfID ->
+            1
+            end;
           true ->
             0
         end
@@ -198,23 +206,23 @@ startRequests(SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable) when N
       chordMaster:whereis(SelfID) ! {done, SelfID};
 %%# startRequests(selfID, numNodes, numRequests-1, m, fingerTable, lookUpTable)
     true ->
-      case member(Rand_node, maps:iterator(FingerTable)) of
+      case lists:member(Rand_node, maps:iterator(FingerTable)) of
         true -> Node_pid = chordNodes:whereis(Rand_node)
       end,
 
-      case any(filter(FingerTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z < Rand_node end) of
+      case lists:any(maps:filter(FingerTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z < Rand_node end) of
         true ->
-          case any(filter(LookUpTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z > SelfID end) of
+          case lists:any(lists:filter(LookUpTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z > SelfID end) of
             true ->
-              Temp = filter(sort(values(FingerTable)), fun(Z) -> Z - Rand_node < 0 end),
-              Temp1 = reverse(Temp),
+              Temp = lists:filter(lists:sort(maps:values(FingerTable)), fun(Z) -> Z - Rand_node < 0 end),
+              Temp1 = lists:reverse(Temp),
               [Head | _] = Temp1,
               Node_pid = chordNodes:whereis(Head);
             false ->
               Node_pid = chordMaster:whereis(Successor)
           end
       end,
-      update_counter(counter, "counter", {2, 1}),
+      ets:update_counter(counter, "counter", {2, 1}),
       gen_Server:cast(Node_pid, {find_this_node, Rand_node})
   end,
   done;
@@ -225,20 +233,24 @@ startRequests(SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable) ->
 %%# IO.inspect lookUpTable, label: "Node #{selfID}'s LT:"
   [LowNode, HighNode] = findInfo(LookUpTable),
   [Successor, Predecessor] = findSucPred(SelfID, LookUpTable, LowNode, HighNode),
-  Rand_node = rand:uniform(pow(2, M)),
+  Rand_node = rand:uniform(math:pow(2, M)),
 %%# IO.puts "node: #{selfID} -> random node: #{rand_node}"
   InRange =
     if
       SelfID == LowNode ->
-        if Rand_node > HighNode or Rand_node =< LowNode ->
+        if Rand_node > HighNode -> 
+          1;
+          Rand_node =< LowNode ->
           1;
           true ->
             0
         end;
       true ->
         if
-          Rand_node > Predecessor and Rand_node =< SelfID ->
-            1;
+          Rand_node > Predecessor ->
+            if  Rand_node =< SelfID ->
+            1
+            end;
           true ->
             0
         end
@@ -249,23 +261,23 @@ startRequests(SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable) ->
       chordMaster:whereis(SelfID) ! {done, SelfID};
 %%# startRequests(selfID, numNodes, numRequests-1, m, fingerTable, lookUpTable)
     true ->
-      case member(Rand_node, maps:iterator(FingerTable)) of
+      case lists:member(Rand_node, maps:iterator(FingerTable)) of
         true -> Node_pid = chordNodes:whereis(Rand_node)
       end,
 
-      case any(filter(FingerTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z < Rand_node end) of
+      case lists:any(lists:filter(FingerTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z < Rand_node end) of
         true ->
-          case any(filter(LookUpTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z > SelfID end) of
+          case lists:any(lists:filter(LookUpTable, fun(Z) -> Z < Rand_node end), fun(Z) -> Z > SelfID end) of
             true ->
-              Temp = filter(sort(values(FingerTable)), fun(Z) -> Z - Rand_node < 0 end),
-              Temp1 = reverse(Temp),
+              Temp = lists:filter(lists:sort(map:values(FingerTable)), fun(Z) -> Z - Rand_node < 0 end),
+              Temp1 = lists:reverse(Temp),
               [Head | _] = Temp1,
               Node_pid = chordNodes:whereis(Head);
             false ->
               Node_pid = chordMaster:whereis(Successor)
           end
       end,
-      update_counter(counter, "counter", {2, 1}),
+      ets:update_counter(counter, "counter", {2, 1}),
       gen_Server:cast(Node_pid, {find_this_node, Rand_node}),
       startRequests(SelfID, NumNodes, NumRequests - 1, M, FingerTable, LookUpTable)
   end.
@@ -273,7 +285,7 @@ startRequests(SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable) ->
 %%--------------- Hashed key ---------------------%%
 getHashedID(I,M) ->
   KeyGen = integer_to_list(I),
-  httpd_util:hexlist_to_integer(io_lib:format("~128.16.0b", [binary:decode_unsigned(crypto:hash(sha256, KeyGen))])) rem math:pow(2,M).
+  httpd_util:hexlist_to_integer(io_lib:format("~64.16.0b", [binary:decode_unsigned(crypto:hash(sha256, KeyGen))])) rem trunc(math:pow(2,M)).
 
 terminate(_Reason, _State = #chordNodes_state{}) ->
   ok.
