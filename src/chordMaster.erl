@@ -1,17 +1,8 @@
-%%%-------------------------------------------------------------------
-%%% @author kartheek
-%%% @copyright (C) 2022, <COMPANY>
-%%% @doc
-%%%
-%%% @end
-%%% Created : 15. Oct 2022 8:26 pm
-%%%-------------------------------------------------------------------
 -module(chordMaster).
--author("kartheek").
 
 %% API
 
--export([start/2, createNodes/4, createNodes/4, wait_for_all_nodes/1, startRequests/2, fixFinger/2]).
+-export([start/2, createNodes/4, wait_for_all_nodes/1, startRequests/2, fixFinger/2]).
 
 start(NumNodes,NumRequests) ->
   if
@@ -61,7 +52,7 @@ chord_logic(NumNodes, M, NumRequests) ->
 %%--------------- Hashed key ---------------------%%
 getHashedID(I,M) ->
   KeyGen = integer_to_list(I),
-  hexlist_to_integer(io_lib:format("~128.16.0b", [binary:decode_unsigned(crypto:hash(sha256, KeyGen))])) rem pow(2,M).
+  httpd_util:hexlist_to_integer(io_lib:format("~128.16.0b", [binary:decode_unsigned(crypto:hash(sha256, KeyGen))])) rem math:pow(2,M).
 %%-------------------------------------------------%%
 
 %%--------------- This function makes the master wait till all the nodes send 'done' ---------------%%
@@ -107,7 +98,7 @@ startRequests(M, NumNodes) when NumNodes > 1->
 %%----- This function takes the total hops value from the counter and calculates the average hops for the whole network ---%%
 calculateAvgHops(NumNodes, NumRequests) ->
   io:format("calculating the average hops for the whole network"),
-  Val = match(counter, {"$1", "$2"}),
+  Val = match_spec:match(counter, {"$1", "$2"}),
   [Head | _] = Val,
   [_, Count] = Head,
   TotAvgHop = Count / (NumNodes * NumRequests),

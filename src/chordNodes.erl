@@ -1,13 +1,4 @@
-%%%-------------------------------------------------------------------
-%%% @author kartheek
-%%% @copyright (C) 2022, <COMPANY>
-%%% @doc
-%%%
-%%% @end
-%%% Created : 19. Oct 2022 9:00 pm
-%%%-------------------------------------------------------------------
 -module(chordNodes).
--author("kartheek").
 
 -behaviour(gen_server).
 
@@ -15,32 +6,15 @@
 -export([start_link/6]).
 
 %% gen_server callbacks
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-  code_change/3, startRequests/6]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,code_change/3, startRequests/6]).
 
 -define(SERVER, ?MODULE).
 
 -record(chordNodes_state, {}).
 
-%%%===================================================================
-%%% API
-%%%===================================================================
-
-%% @doc Spawns the server and registers the local name (unique)
--spec(start_link() ->
-  {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link(SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable) ->
   gen_server:start_link({local, ?SERVER}, ?MODULE, [SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable], []).
 
-%%%===================================================================
-%%% gen_server callbacks
-%%%===================================================================
-
-%% @private
-%% @doc Initializes the server
--spec(init(Args :: term()) ->
-  {ok, State :: #chordNodes_state{}} | {ok, State :: #chordNodes_state{}, timeout() | hibernate} |
-  {stop, Reason :: term()} | ignore).
 init([SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable]) ->
   LookUpTable = fillLookUpTable(NumNodes, LookUpTable, M),
   chordMaster:whereis(SelfID) ! {done, SelfID},
@@ -52,25 +26,19 @@ fillLookUpTable(NumNodes, LookUpTable, M) ->
     Node = getHashedID(N, M),
     LookUpTable ++ Node
                       end, lists:seq(1, NumNodes)),
-  LookUpTable = sort(LookUpTable).
-%%----------------------------------------------------------------------------------------------------%%%
-%%%%-----------------------
-%%# This function fills the finger table of the node by referring the lookUpTable
-%%# Input: selfID, numRequests, m, fingerTable, lookUpTable, lowNode, highNode, count
-%%# calls: itself
-%%%%--------------------------
+  LookUpTable = lists:sort(LookUpTable).
 
 fixFingerTable(SelfID, NumRequests, M, FingerTable, LookUpTable, LowNode, HighNode, 1) ->
-  Num = (SelfID + pow(2, M - 1)) rem pow(2, M),
+  Num = (SelfID + math:pow(2, M - 1)) rem math:pow(2, M),
   FingerTable =
     if
       Num > HighNode ->
-        Temp = filter(fun(Z) -> pow(2, M) + Z - Num >= 0, LookUpTable end),
+        Temp = lists:filter(fun(Z) -> math:pow(2, M) + Z - Num >= 0, LookUpTable end),
         [Head | _] = Temp,
         maps:put(FingerTable, M - 1, Head);
 
       Num =< HighNode ->
-        Temp = filter(fun(Z) -> (Z - Num) > 0, LookUpTable end),
+        Temp = lists:filter(fun(Z) -> (Z - Num) > 0, LookUpTable end),
         [Head | _] = Temp,
         maps:put(FingerTable, M - 1, Head)
     end,
@@ -78,42 +46,25 @@ fixFingerTable(SelfID, NumRequests, M, FingerTable, LookUpTable, LowNode, HighNo
   done;
 
 fixFingerTable(SelfID, NumRequests, M, FingerTable, LookUpTable, LowNode, HighNode, Count) when Count > 1 ->
-  Num = (SelfID + pow(2, M - Count)) rem pow(2, M),
+  Num = (SelfID + math:pow(2, M - Count)) rem math:pow(2, M),
   FingerTable =
     if
       Num > HighNode ->
-        Temp = filter(fun(Z) -> pow(2, M) + Z - Num >= 0, LookUpTable end),
+        Temp = lists:filter(fun(Z) -> math:pow(2, M) + Z - Num >= 0, LookUpTable end),
         [Head | _] = Temp,
         maps:put(FingerTable, M - Count, Head);
 
       Num =< HighNode ->
-        Temp = filter(fun(Z) -> (Z - Num) > 0, LookUpTable end),
+        Temp = lists:filter(fun(Z) -> (Z - Num) > 0, LookUpTable end),
         [Head | _] = Temp,
         maps:put(FingerTable, M - Count, Head)
     end,
 
   fixFingerTable(SelfID, NumRequests, M, FingerTable, LookUpTable, LowNode, HighNode, Count - 1).
-%%------------------------------------------------------------------------------------%%%
 
-%% @private
-%% @doc Handling call messages
--spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
-    State :: #chordNodes_state{}) ->
-  {reply, Reply :: term(), NewState :: #chordNodes_state{}} |
-  {reply, Reply :: term(), NewState :: #chordNodes_state{}, timeout() | hibernate} |
-  {noreply, NewState :: #chordNodes_state{}} |
-  {noreply, NewState :: #chordNodes_state{}, timeout() | hibernate} |
-  {stop, Reason :: term(), Reply :: term(), NewState :: #chordNodes_state{}} |
-  {stop, Reason :: term(), NewState :: #chordNodes_state{}}).
 handle_call(_Request, _From, State = #chordNodes_state{}) ->
   {reply, ok, State}.
-%%------------------------------------------------
-%% @private
-%% @doc Handling cast messages
--spec(handle_cast(Request :: term(), State :: #chordNodes_state{}) ->
-  {noreply, NewState :: #chordNodes_state{}} |
-  {noreply, NewState :: #chordNodes_state{}, timeout() | hibernate} |
-  {stop, Reason :: term(), NewState :: #chordNodes_state{}}).
+
 handle_cast({find_this_node, Rand_node}, State = #chordNodes_state{}) ->
   [SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable] = State,
   [LowNode, HighNode] = findInfo(LookUpTable),
@@ -161,13 +112,6 @@ handle_cast({find_this_node, Rand_node}, State = #chordNodes_state{}) ->
   end,
   {noreply, State}.
 
-%%----------------------------------------------
-%% @private
-%% @doc Handling all non call/cast messages
--spec(handle_info(Info :: timeout() | term(), State :: #chordNodes_state{}) ->
-  {noreply, NewState :: #chordNodes_state{}} |
-  {noreply, NewState :: #chordNodes_state{}, timeout() | hibernate} |
-  {stop, Reason :: term(), NewState :: #chordNodes_state{}}).
 handle_info({_, fixFingerTable}, State = #chordNodes_state{}) ->
 
   [SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable] = State,
@@ -213,7 +157,7 @@ setnth(I, [E | Rest], New) when I > 1 -> [E | setnth(I - 1, Rest, New)].
 %%---------------------------------------------
 findInfo(LookUpTable) ->
   [LowNode | _] = LookUpTable,
-  LookUpTable = reverse(LookUpTable),
+  LookUpTable = lists:reverse(LookUpTable),
   [HighNode | _] = LookUpTable,
   [LowNode, HighNode].
 %%-----------------------------------------
@@ -234,7 +178,8 @@ startRequests(SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable) when N
   InRange =
     if
       SelfID == LowNode ->
-        if Rand_node > HighNode or Rand_node =< LowNode ->
+        if 
+          Rand_node > HighNode or Rand_node =< LowNode ->
           1;
           true ->
             0
@@ -328,16 +273,8 @@ startRequests(SelfID, NumNodes, NumRequests, M, FingerTable, LookUpTable) ->
 %%--------------- Hashed key ---------------------%%
 getHashedID(I,M) ->
   KeyGen = integer_to_list(I),
-  hexlist_to_integer(io_lib:format("~128.16.0b", [binary:decode_unsigned(crypto:hash(sha256, KeyGen))])) rem pow(2,M).
-%%-------------------------------------------------%%
+  httpd_util:hexlist_to_integer(io_lib:format("~128.16.0b", [binary:decode_unsigned(crypto:hash(sha256, KeyGen))])) rem math:pow(2,M).
 
-%% @private
-%% @doc This function is called by a gen_server when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any
-%% necessary cleaning up. When it returns, the gen_server terminates
-%% with Reason. The return value is ignored.
--spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
-    State :: #chordNodes_state{}) -> term()).
 terminate(_Reason, _State = #chordNodes_state{}) ->
   ok.
 
